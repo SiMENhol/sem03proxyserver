@@ -101,10 +101,10 @@ func proxy(client io.Reader, server io.Writer) error {
 		}
 
 		// Krypterer meldingen fra klienten
-		kryptertMelding := mycrypt.Krypter([]rune(string(buf[:n])), mycrypt.ALF_SEM03, 4)
-		log.Println("Kryptert melding fra klient: ", string(kryptertMelding))
+		dekryptertMelding := mycrypt.Krypter([]rune(string(buf[:n])), mycrypt.ALF_SEM03, 4)
+		log.Println("dekryptert melding fra klient: ", string(dekryptertMelding))
 
-		_, err = server.Write([]byte(string(kryptertMelding)))
+		_, err = server.Write([]byte(string(dekryptertMelding)))
 		if err != nil {
 			log.Println(err)
 			return err
