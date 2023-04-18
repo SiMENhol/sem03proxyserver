@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 	"sync"
+
+	"github.com/SiMENhol/is105sem03/mycrypt"
 )
 
 func main() {
@@ -42,6 +44,7 @@ func main() {
 	wg.Wait()
 }
 
+/*
 func proxy(client io.Reader, server io.Writer) error {
 	clientWriter, clientIsWriter := client.(io.Writer)
 	serverReader, serverIsReader := server.(io.Reader)
@@ -53,4 +56,58 @@ func proxy(client io.Reader, server io.Writer) error {
 	}
 	_, err := io.Copy(server, client)
 	return err
+}
+*/
+
+func proxy(client io.Reader, server io.Writer) error {
+	clientWriter, clientIsWriter := client.(io.Writer)
+	serverReader, serverIsReader := server.(io.Reader)
+
+	if serverIsReader && clientIsWriter {
+		go func() {
+			buf := make([]byte, 1024)
+			for {
+				n, err := serverReader.Read(buf)
+				if err != nil {
+					if err != io.EOF {
+						log.Println(err)
+					}
+					return // fra for-løkke
+				}
+
+				// Dekrypterer meldingen fra serveren
+				dekryptertMelding := mycrypt.Krypter([]rune(string(buf[:n])), mycrypt.ALF_SEM03, len(mycrypt.ALF_SEM03)-4)
+				log.Println("Dekryptert melding fra server: ", string(dekryptertMelding))
+
+				// Sender meldingen til klienten etter kryptering
+				kryptertMelding := mycrypt.Krypter([]rune(string(dekryptertMelding)), mycrypt.ALF_SEM03, 4)
+				_, err = clientWriter.Write([]byte(string(kryptertMelding)))
+				if err != nil {
+					log.Println(err)
+					return // fra for-løkke
+				}
+			}
+		}()
+	}
+
+	buf := make([]byte, 1024)
+	for {
+		n, err := client.Read(buf)
+		if err != nil {
+			if err != io.EOF {
+				log.Println(err)
+			}
+			return err
+		}
+
+		// Krypterer meldingen fra klienten
+		kryptertMelding := mycrypt.Krypter([]rune(string(buf[:n])), mycrypt.ALF_SEM03, 4)
+		log.Println("Kryptert melding fra klient: ", string(kryptertMelding))
+
+		_, err = server.Write([]byte(string(kryptertMelding)))
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+	}
 }
