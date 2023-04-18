@@ -11,7 +11,7 @@ import (
 
 func main() {
 	var wg sync.WaitGroup
-	proxyServer, err := net.Listen("tcp", "172.17.0.4:8080")
+	proxyServer, err := net.Listen("tcp", "127.0.0.1:")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -28,15 +28,55 @@ func main() {
 			go func(client net.Conn) {
 				defer client.Close()
 
-				server, err := net.Dial("tcp", "172.17.0.2:8080")
+				server, err := net.Dial("tcp", "127.0.0.1:8080")
 				if err != nil {
 					log.Println(err)
 					return
 				}
 				defer server.Close()
+
+				// Leser kryptert melding fra klienten
+				buf := make([]byte, 1024)
+				n, err := client.Read(buf)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+				kryptertMelding := buf[:n]
+
+				// Dekrypterer meldingen fra klienten
+				dekryptertMelding := mycrypt.Krypter([]rune(string(kryptertMelding)), mycrypt.ALF_SEM03, len(mycrypt.ALF_SEM03)-4)
+				log.Println("Dekryptert melding fra klienten: ", string(dekryptertMelding))
+
+				// Krypterer meldingen og sender den til serveren
+				kryptertMeldingTilServer := mycrypt.Krypter([]rune(string(dekryptertMelding)), mycrypt.ALF_SEM03, len(mycrypt.ALF_SEM03)+4)
+				_, err = server.Write([]byte(string(kryptertMeldingTilServer)))
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
 				err = proxy(client, server)
 				if err != nil && err != io.EOF {
 					log.Println(err)
+				}
+
+				// Leser kryptert svar fra serveren
+				n, err = server.Read(buf)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+				kryptertSvar := buf[:n]
+
+				// Dekrypterer svar fra serveren og sender det tilbake til klienten
+				dekryptertSvar := mycrypt.Krypter([]rune(string(kryptertSvar)), mycrypt.ALF_SEM03, len(mycrypt.ALF_SEM03)-4)
+				log.Println("Dekryptert svar fra serveren: ", string(dekryptertSvar))
+
+				_, err = client.Write([]byte(string(dekryptertSvar)))
+				if err != nil {
+					log.Println(err)
+					return
 				}
 			}(conn)
 		}
@@ -44,7 +84,6 @@ func main() {
 	wg.Wait()
 }
 
-/*
 func proxy(client io.Reader, server io.Writer) error {
 	clientWriter, clientIsWriter := client.(io.Writer)
 	serverReader, serverIsReader := server.(io.Reader)
@@ -56,58 +95,4 @@ func proxy(client io.Reader, server io.Writer) error {
 	}
 	_, err := io.Copy(server, client)
 	return err
-}
-*/
-
-func proxy(client io.Reader, server io.Writer) error {
-	clientWriter, clientIsWriter := client.(io.Writer)
-	serverReader, serverIsReader := server.(io.Reader)
-
-	if serverIsReader && clientIsWriter {
-		go func() {
-			buf := make([]byte, 1024)
-			for {
-				n, err := serverReader.Read(buf)
-				if err != nil {
-					if err != io.EOF {
-						log.Println(err)
-					}
-					return // fra for-løkke
-				}
-
-				// Dekrypterer meldingen fra serveren
-				dekryptertMelding := mycrypt.Krypter([]rune(string(buf[:n])), mycrypt.ALF_SEM03, len(mycrypt.ALF_SEM03)-4)
-				log.Println("Dekryptert melding fra server: ", string(dekryptertMelding))
-
-				// Sender meldingen til klienten etter kryptering
-				kryptertMelding := mycrypt.Krypter([]rune(string(dekryptertMelding)), mycrypt.ALF_SEM03, 4)
-				_, err = clientWriter.Write([]byte(string(kryptertMelding)))
-				if err != nil {
-					log.Println(err)
-					return // fra for-løkke
-				}
-			}
-		}()
-	}
-
-	buf := make([]byte, 1024)
-	for {
-		n, err := client.Read(buf)
-		if err != nil {
-			if err != io.EOF {
-				log.Println(err)
-			}
-			return err
-		}
-
-		// Krypterer meldingen fra klienten
-		dekryptertMelding := mycrypt.Krypter([]rune(string(buf[:n])), mycrypt.ALF_SEM03, 4)
-		log.Println("dekryptert melding fra klient: ", string(dekryptertMelding))
-
-		_, err = server.Write([]byte(string(dekryptertMelding)))
-		if err != nil {
-			log.Println(err)
-			return err
-		}
-	}
 }
