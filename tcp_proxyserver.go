@@ -5,8 +5,6 @@ import (
 	"log"
 	"net"
 	"sync"
-
-	
 )
 
 func main() {
@@ -16,8 +14,8 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Printf("bundet til %s", proxyServer.Addr().String())
-    wg.Add(1)
-    go func() {
+	wg.Add(1)
+	go func() {
 		defer wg.Done()
 		for {
 			log.Println("før proxyServer.Accept() kallet")
@@ -29,7 +27,7 @@ func main() {
 				defer client.Close()
 
 				server, err := net.Dial("tcp", "172.17.0.3:8080")
-                if err != nil {
+				if err != nil {
 					log.Println(err)
 					return
 				}
@@ -55,4 +53,4 @@ func proxy(client io.Reader, server io.Writer) error {
 	}
 	_, err := io.Copy(server, client)
 	return err
-} 
+}
